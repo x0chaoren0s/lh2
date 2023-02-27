@@ -1,9 +1,9 @@
 from lh.utils import singleton, get_tdx_api, tdx_disconnect
 from lh.utils.tushare_df_fetcher import Tushare_df_fetcher
-from lh.time import Trade_time
+from lh.time import Trade_time, normalize_date
 import tushare as ts
 import pandas as pd
-# import pandas as pd
+import requests
 
 @singleton
 class SingleStock_daily:
@@ -16,7 +16,7 @@ class SingleStock_daily:
     tt = Trade_time()
     tf = Tushare_df_fetcher()
     def __init__(self) -> None:
-        self.tdxapi = get_tdx_api() # 不设置为静态成员变量，防止声明该类的时候被自动运行get_tdx_api，从而无法正常结束
+        # self.tdxapi = get_tdx_api() # 不设置为静态成员变量，防止声明该类的时候被自动运行get_tdx_api，从而无法正常结束
         self.stock2tags_buf = dict()
     # def getPrice(self, ts_code, trade_date):
     #     '''
@@ -57,18 +57,21 @@ class SingleStock_daily:
     #             'vol':float(record[5]), 'amount':float(record[6])/1000.0})
     #     return ret
     
-    def getPrice_df(self, ts_code=None, trade_date=None, end_date=None) -> pd.DataFrame:
+    def getDaily_df(self, ts_code=None, trade_date=None, end_date=None) -> pd.DataFrame:
         '''
-        日线数据
+        日k线数据
         返回一个dataframe: {ts_code, trade_date, open, high, low, close, pre_close, change, pct_chg, vol, amount}
         '''
         return self.tf.daily(ts_code, trade_date, end_date)
+    
+    def getCandles_day_df(self,  ts_code=None, trade_date=None, end_date=None) -> pd.DataFrame:
+        return self.getDaily_df(ts_code, trade_date, end_date)
 
     def getPreClose(self, ts_code, trade_date) -> float:
         '''
         返回特定股票trade_date的上一个交易日的收盘价
         '''
-        return self.getPrice_df(ts_code=ts_code,trade_date=trade_date)['pre_close'].tolist()[0]
+        return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['pre_close'].tolist()[0]
 
     # def getFenshi(self, ts_code, trade_date):
     #     '''
@@ -110,27 +113,38 @@ class SingleStock_daily:
     #     #         int(price_info['pre_close']*110)/100.0 == price_info['close'] or \
     #     #         int(price_info['pre_close']*105)/100.0 == price_info['close']
 
-    # def getInfo(self, ts_code) -> dict:
-    #     '''
-    #     获取个股基本信息，返回一个dict, keys: {'ts_code', 'ts_name','list_date'}
-    #     '''
-    #     ret = {'ts_code': ts_code}
-    #     url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/PageAjax?code={ts_code[-2:]+ts_code[:-3]}'
-    #     res = requests.get(url = url, headers=self.headers)
-    #     while res.status_code!=200:
-    #         res = requests.get(url = url, headers=self.headers)
-    #     try:
-    #         resjson = res.json()
-    #     except:
-    #         # 数据损坏重新运行
-    #         return self.getInfo(ts_code)
+    def getName(self, ts_code) -> str:
+        return self.tf.stock_name(ts_code=ts_code)
+
+    def getInfo(self, ts_code, trade_date=None, need_tags=False, need_candles_day_df=False) -> dict:
+        '''
+        获取个股基本信息，返回一个dict, keys: {'ts_code','ts_name','list_date','tags','candles_day_df','fenshi_5'}
+        '''
+        if trade_date is None:
+            trade_date = self.tt.nowTradeDate()
+        ret = {'ts_code': ts_code}
+        url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/PageAjax?code={ts_code[-2:]+ts_code[:-3]}'
+        res = requests.get(url = url, headers=self.headers)
+        while res.status_code!=200:
+            res = requests.get(url = url, headers=self.headers)
+        try:
+            resjson = res.json()
+        except:
+            # 数据损坏重新运行
+            return self.getInfo(ts_code, trade_date, need_tags, need_candles_day_df)
 
             
-    #     ret['ts_name'] = resjson['jbzl'][0]['STR_NAMEA']
-    #     listing_date = resjson['fxxg'][0]['LISTING_DATE'] # '2007-06-13 00:00:00'
-    #     listing_date = normalize_date(listing_date, '%Y-%m-%d %H:%M:%S', '%Y%m%d') # '20070613'
-    #     ret['list_date'] = listing_date
-    #     return ret.copy()
+        ret['ts_name'] = resjson['jbzl'][0]['STR_NAMEA']
+        listing_date = resjson['fxxg'][0]['LISTING_DATE'] # '2007-06-13 00:00:00'
+        listing_date = normalize_date(listing_date, '%Y-%m-%d %H:%M:%S', '%Y%m%d') # '20070613'
+        ret['list_date'] = listing_date
+        if need_tags:
+            ret['tags'] = self.getTags(ts_code=ts_code)
+        if need_candles_day_df:
+            ret['candles_day_df'] = self.getCandles_day_df(ts_code=ts_code, end_date=trade_date
+                                                           ).iloc[::-1].reset_index(drop=True)
+
+        return ret.copy()
 
     # def isJustListed(self, ts_code, trade_date):
     #     '''
@@ -141,26 +155,26 @@ class SingleStock_daily:
     #     # return self.pro.bak_basic(ts_code=ts_code)['list_date'].iloc[0] == trade_date
     #     return self.getInfo(ts_code=ts_code)['list_date'] == trade_date
 
-    # def getTags(self, ts_code) -> set:
-    #     '''
-    #     从东财网页获取该股票的题材板块。
-    #     爬虫参考 https://www.jianshu.com/p/883c74f939ee
-    #     动态加载内容爬取参考 https://blog.csdn.net/sinat_38682860/article/details/105798818
+    def getTags(self, ts_code) -> set:
+        '''
+        从东财网页获取该股票的题材板块。
+        爬虫参考 https://www.jianshu.com/p/883c74f939ee
+        动态加载内容爬取参考 https://blog.csdn.net/sinat_38682860/article/details/105798818
 
-    #     返回一个包含所有题材板块名称的集合，如
-    #     {'昨日涨停_含一字', '广东板块', '国产芯片', '无线耳机', '植物照明', '电子元件', '参股新三板', '5G概念', 
-    #     '昨日连板_含一字', '国家安防', '深圳特区', '字节概念', '新能源车', 
-    #     '网红直播', '智能穿戴', '独角兽', '物联网', '区块链', '华为概念'}
-    #     '''
-    #     if ts_code not in self.stock2tags_buf:
-    #         # 浏览器网页 https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/Index?type=web&code=SZ002137#
-    #         # f12搜索 所属板块 和 经营范围 得动态加载接口 https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code=SZ002137
-    #         # url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code=SZ002137'
-    #         url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code={ts_code[-2:]+ts_code[:-3]}'
-    #         res = requests.get(url = url, headers=self.headers)
-    #         while res.status_code!=200:
-    #             res = requests.get(url = url, headers=self.headers)
-    #         resjson = res.json()
-    #         tags = {bk['BOARD_NAME'] for bk in resjson['ssbk']}
-    #         self.stock2tags_buf[ts_code] = tags
-    #     return self.stock2tags_buf[ts_code]
+        返回一个包含所有题材板块名称的集合，如
+        {'昨日涨停_含一字', '广东板块', '国产芯片', '无线耳机', '植物照明', '电子元件', '参股新三板', '5G概念', 
+        '昨日连板_含一字', '国家安防', '深圳特区', '字节概念', '新能源车', 
+        '网红直播', '智能穿戴', '独角兽', '物联网', '区块链', '华为概念'}
+        '''
+        if ts_code not in self.stock2tags_buf:
+            # 浏览器网页 https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/Index?type=web&code=SZ002137#
+            # f12搜索 所属板块 和 经营范围 得动态加载接口 https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code=SZ002137
+            # url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code=SZ002137'
+            url = f'https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code={ts_code[-2:]+ts_code[:-3]}'
+            res = requests.get(url = url, headers=self.headers)
+            while res.status_code!=200:
+                res = requests.get(url = url, headers=self.headers)
+            resjson = res.json()
+            tags = {bk['BOARD_NAME'] for bk in resjson['ssbk']}
+            self.stock2tags_buf[ts_code] = tags
+        return self.stock2tags_buf[ts_code]
