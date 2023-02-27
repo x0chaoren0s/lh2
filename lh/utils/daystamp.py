@@ -1,4 +1,4 @@
-from lh import SingleStock_daily
+from lh.stockinfo.single_stock_daily import SingleStock_daily
 
 class DayStamp:
     ssd = SingleStock_daily()
