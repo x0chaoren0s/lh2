@@ -6,6 +6,7 @@
     <script src="../../static/js/echarts.js"></script>
   </head>
   <body>
+    <script src="../../static/js/echarts_set_myenvironment.js"></script>
     <a href="/">返回首页</a>
     <h1>回测2板</h1>
     <form action="/huice/2ban/set_time_span" method="post">
@@ -13,7 +14,34 @@
     </form>
     <h2>已设置：{{beg_date}}-{{end_date}}</h2>
     <h3>今日复盘：{{trade_date}}</h3>
+    <h4>收盘总值：{{end_total}} 收盘现金：{{end_cash}}</h4>
     <form action="/huice/2ban/working/choosing" method="post">
+      <h3>盘后卖单</h3>
+      <table>
+        <tr>
+          <th>持仓数量</th>
+          <th>持仓市值</th>
+          <th>相关板块热点</th>
+          <th>历史k线</th>
+          <th>分时</th>
+          <th>是否清仓</th>
+        </tr>
+        {% for stk in end_pool %}
+        <tr>
+          <td>{{stk.have_vol}}股</td>
+          <td>{{stk.have_amount}}</td>
+          <td>{{stk.tags}}</td>
+          <td>{{stk.candles_html|safe}}</td>
+          <td>{{stk.fenshi_html|safe}}</td>
+          <td>
+            <input name="sell_tscode" value={{stk.ts_code}} hidden>
+            <input type="radio" name="qingcang" value="no" checked="checked">不清仓<br>
+            <input type="radio" name="qingcang" value="hongpan">红盘清仓<br>
+            <input type="radio" name="qingcang" value="dieting">跌停清仓
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
       <h3>盘后买单</h3>
       <table>
         <tr>
@@ -21,8 +49,8 @@
           <th>股票名称</th>
           <th>相关板块热点</th>
           <th>历史k线</th>
-          <th>5日分时</th>
-          <th>挂单手数</th>
+          <th>分时</th>
+          <th>挂单金额及手数</th>
         </tr>
         {% for stk in daily_pool %}
         <tr>
@@ -30,37 +58,17 @@
           <td>{{stk.ts_name}}</td>
           <td>{{stk.tags}}</td>
           <td>{{stk.candles_html|safe}}</td>
-          <td>{{stk.ts_code}}</td>
-          <td><input name="buy_hands" type="number"></td>
-        </tr>
-        {% endfor %}
-      </table>
-      <h3>盘后卖单</h3>
-      <table>
-        <tr>
-          <th>股票代码</th>
-          <th>股票名称</th>
-          <th>相关板块热点</th>
-          <th>历史k线</th>
-          <th>5日分时</th>
-          <th>是否清仓</th>
-        </tr>
-        {% for stk in daily_pool %}
-        <tr>
-          <td>{{stk['ts_code']}}</td>
-          <td>{{stk.ts_code}}</td>
-          <td>{{stk.ts_code}}</td>
-          <td>{{stk.ts_code}}</td>
-          <td>{{stk.ts_code}}</td>
+          <td>{{stk.fenshi_html|safe}}</td>
           <td>
-            <input type="radio" name="qingcang" value="no" checked="checked">不清仓
-            <input type="radio" name="qingcang" value="hongpan">红盘清仓
-            <input type="radio" name="qingcang" value="dieting">跌停清仓
+            <input name="buy_tscode" value={{stk.ts_code}} hidden>
+            <input name="buy_price" type="number" min="0.00" max="200.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_hands" type="number" value="0">
           </td>
         </tr>
         {% endfor %}
       </table>
       <button type="submit">下一日</button>
     </form>
+    <script src="../../static/js/echarts_enable_all_charts.js"></script>
   </body>
 </html>
