@@ -7,10 +7,7 @@ app.register_blueprint(huice_bp)
 @app.template_filter('json')
 def my_to_json(string):
     return json.loads(string)
-class D:
-    def __init__(self,v,n) -> None:
-        self.value=v
-        self.name=n
+
 @app.route('/')
 def index():
     # return flask.render_template('test.html')
