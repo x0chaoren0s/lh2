@@ -73,20 +73,20 @@ class SingleStock_daily:
         '''
         return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['pre_close'].tolist()[0]
 
-    # def getFenshi(self, ts_code, trade_date):
-    #     '''
-    #     #### 获取历史分时数据，即历史1分钟数据。
-    #     #### trade_date会自动转换为最近的历史交易日。
-    #     #### 返回一个dataframe，共240行（0-239，代表一个交易日的4个小时开盘时间），两列：[price, vol, trade_time]
-    #     '''
-    #     # if not self.tdxapi.connect(self.tdxip, self.tdxport):
-    #     #     raise RuntimeError('通达信服务器连接失败。')
-    #     tdx_market = 0 if ts_code[-2:]=='SZ' else 1
-    #     tdx_code = ts_code[:-3]
-    #     tdx_date = self.tt.toTradeDate(trade_date)
-    #     ret_df = self.tdxapi.to_df(self.tdxapi.get_history_minute_time_data(tdx_market, tdx_code, tdx_date))
-    #     ret_df['trade_time'] = self.tt.trade_mins[:len(ret_df)]
-    #     return ret_df
+    def getFenshi(self, ts_code, trade_date):
+        '''
+        #### 获取历史分时数据，即历史1分钟数据。
+        #### trade_date会自动转换为最近的历史交易日。
+        #### 返回一个dataframe，共240行（0-239，代表一个交易日的4个小时开盘时间），两列：[price, vol, trade_time]
+        '''
+        # if not self.tdxapi.connect(self.tdxip, self.tdxport):
+        #     raise RuntimeError('通达信服务器连接失败。')
+        tdx_market = 0 if ts_code[-2:]=='SZ' else 1
+        tdx_code = ts_code[:-3]
+        tdx_date = self.tt.toTradeDate(trade_date)
+        ret_df = self.tdxapi.to_df(self.tdxapi.get_history_minute_time_data(tdx_market, tdx_code, tdx_date))
+        ret_df['trade_time'] = self.tt.trade_mins[:len(ret_df)]
+        return ret_df
         
     
     # def isLimitDown(self, ts_code, trade_date) -> bool:
@@ -116,7 +116,7 @@ class SingleStock_daily:
     def getName(self, ts_code) -> str:
         return self.tf.stock_name(ts_code=ts_code)
 
-    def getInfo(self, ts_code, trade_date=None, need_tags=False, need_candles_day_df=False) -> dict:
+    def getInfo(self, ts_code, trade_date=None, need_tags=False, need_candles_day_df=False, need_fenshi_5=False) -> dict:
         '''
         获取个股基本信息，返回一个dict, keys: {'ts_code','ts_name','list_date','tags','candles_day_df','fenshi_5'}
         '''
@@ -143,6 +143,8 @@ class SingleStock_daily:
         if need_candles_day_df:
             ret['candles_day_df'] = self.getCandles_day_df(ts_code=ts_code, end_date=trade_date
                                                            ).iloc[::-1].reset_index(drop=True)
+        if need_fenshi_5:
+            ret['fenshi_5'] = 1
 
         return ret.copy()
 
