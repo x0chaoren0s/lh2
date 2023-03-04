@@ -16,7 +16,9 @@ def get_tdx_api():
     print('tdx_api connected from get_tdx_api()')
     return tdx_api
 
-def tdx_disconnect(btn=None, **args):
+def tdx_disconnect(btn=None, api=None, **args):
     '''断开由 get_tdx_api() 获取的api与通达信服务器的连接'''
-    get_tdx_api().disconnect()
+    if api is None:
+        api = get_tdx_api() # 单例
+    api.disconnect()
     print('tdx_api disconnected from tdx_disconnect()')
