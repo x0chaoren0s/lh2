@@ -2,14 +2,14 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>lh - 回测2板</title>
+    <title>lh - 回测1板+低吸</title>
     <script src="../../static/js/echarts.js"></script>
   </head>
   <body>
     <script src="../../static/js/echarts_set_myenvironment.js"></script>
     <a href="/">返回首页</a>
-    <h1>回测2板</h1>
-    <form action="/huice/2ban/set_time_span" method="post">
+    <h1>回测1板+低吸</h1>
+    <form action="/huice/1ban_dixi/set_time_span" method="post">
         起止时间：<input name="trade_time_beg">-<input name="trade_time_end"><button type="submit">开始回测</button>
     </form>
     <h2>已设置：{{beg_date}}-{{end_date}}</h2>
@@ -17,10 +17,24 @@
       <button>保存下载的数据</button>
     </form>
     <h3>今日复盘：{{trade_date}}</h3>
-    <h4>收盘总值：{{end_total}} 收盘现金：{{end_cash}}</h4>
+    <h4>收盘总值：{{end_total}} 收盘现金：{{end_cash}} 昨日涨额：{{change}} 昨日涨幅: {{chg_pct}}%</h4>
     {{account_lines_html|safe}}
-    <form action="/huice/2ban/working/choosing" method="post">
-      <h3>盘后卖单</h3>
+    <h4>收盘tags:</h4>
+    <table>
+      <tr>
+        <th>相关股票数</th>
+        <th>tags</th>
+      </tr>
+      {% for count_tags in end_tags %}
+      <tr>
+        <td>{{count_tags[0]}}</td>
+        <td>{{count_tags[1]}}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <!-- <div>{{end_tags}}</div> -->
+    <form action="/huice/1ban_dixi/working/choosing" method="post">
+      <h3>持仓股票</h3>
       <table>
         <tr>
           <th>持仓数量</th>
@@ -29,6 +43,8 @@
           <th>历史k线</th>
           <th>分时</th>
           <th>是否清仓</th>
+          <th>加仓金额及手数</th>
+          <th>是否跟踪低吸</th>
         </tr>
         {% for stk in end_pool %}
         <tr>
@@ -44,6 +60,16 @@
             <input type="radio" name="sell_type_{{stk.ts_code}}" value="shuishangqingcang">水上清仓<br>
             <input type="radio" name="sell_type_{{stk.ts_code}}" value="dietingqingcang">跌停清仓
           </td>
+          <td>
+            <input name="buy_tscode" value={{stk.ts_code}} hidden>
+            <input name="buy_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_hands" type="number" value="0">
+          </td>
+          <td>
+            <input name="dixi_tscode_from_sell" value={{stk.ts_code}} hidden>
+            <input type="radio" name="dixi_from_sell_{{stk.ts_code}}" value="yes" checked="checked">跟踪低吸<br>
+            <input type="radio" name="dixi_from_sell_{{stk.ts_code}}" value="no">不跟踪<br>
+          </td>
         </tr>
         {% endfor %}
       </table>
@@ -54,6 +80,7 @@
           <th>历史k线</th>
           <th>分时</th>
           <th>挂单金额及手数</th>
+          <th>是否跟踪低吸</th>
         </tr>
         {% for stk in daily_pool %}
         <tr>
@@ -62,8 +89,13 @@
           <td>{{stk.fenshi_html|safe}}</td>
           <td>
             <input name="buy_tscode" value={{stk.ts_code}} hidden>
-            <input name="buy_price" type="number" min="0.00" max="200.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.buy_price_str}}>
             <input name="buy_hands" type="number" value="0">
+          </td>
+          <td>
+            <input name="dixi_tscode_from_buy" value={{stk.ts_code}} hidden>
+            <input type="radio" name="dixi_from_buy_{{stk.ts_code}}" value="yes" checked>跟踪低吸<br>
+            <input type="radio" name="dixi_from_buy_{{stk.ts_code}}" value="no">不跟踪<br>
           </td>
         </tr>
         {% endfor %}

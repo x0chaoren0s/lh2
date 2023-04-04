@@ -1,6 +1,8 @@
 from lh.utils import singleton, get_tdx_api, tdx_disconnect
 from lh.utils.tushare_df_fetcher import Tushare_df_fetcher
+from lh.utils.tushare_df_processor import Tushare_df_processor
 from lh.time import Trade_time, normalize_date
+import lh.stockinfo.data_fetcher as df
 import tushare as ts
 import pandas as pd
 import requests
@@ -14,7 +16,9 @@ class SingleStock_daily:
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36'
     }
     tt = Trade_time()
-    tf = Tushare_df_fetcher()
+    # tf = Tushare_df_fetcher()
+    tf = df
+    tp = Tushare_df_processor()
     def __init__(self) -> None:
         # self.tdxapi = get_tdx_api() # 不设置为静态成员变量，防止声明该类的时候被自动运行get_tdx_api，从而无法正常结束
         self.stock2tags_buf = dict()
@@ -65,13 +69,70 @@ class SingleStock_daily:
         return self.tf.daily(ts_code, trade_date, end_date)
     
     def getCandles_day_df(self,  ts_code=None, trade_date=None, end_date=None) -> pd.DataFrame:
+        '''
+        日k线数据
+        返回一个dataframe: {ts_code, trade_date, open, high, low, close, pre_close, change, pct_chg, vol, amount}
+        '''
         return self.getDaily_df(ts_code, trade_date, end_date)
 
     def getPreClose(self, ts_code, trade_date) -> float:
         '''
         返回特定股票trade_date的上一个交易日的收盘价
         '''
-        return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['pre_close'].tolist()[0]
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['pre_close'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {trade_date}'
+
+    def getPreOpen(self, ts_code, trade_date) -> float:
+        '''
+        返回特定股票trade_date的上一个交易日的开盘价
+        '''
+        pre_date = self.tt.preTradeDate(date=trade_date)
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=pre_date)['open'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {pre_date}'
+
+    def getHigh(self, ts_code, trade_date) -> float:
+        '''
+        返回特定股票所在交易日的最高价
+        '''
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['high'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {trade_date}'
+
+    def getOpen(self, ts_code, trade_date) -> float:
+        '''
+        返回特定股票所在交易日的开盘价
+        '''
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['open'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {trade_date}'
+
+    def getDieting(self, ts_code, trade_date) -> float:
+        '''
+        返回特定沪深主板股票所在交易日的跌停价
+        '''
+        preclose = self.getPreClose(ts_code=ts_code,trade_date=trade_date)
+        if self.tf.is_st(ts_code=ts_code):
+            ret = preclose-round(preclose*0.05,2)
+        else:
+            ret = preclose-round(preclose*0.1,2)
+        return ret
+
+    def getZhangting(self, ts_code, trade_date) -> float:
+        '''
+        返回特定沪深主板股票所在交易日的涨停价
+        '''
+        preclose = self.getPreClose(ts_code=ts_code,trade_date=trade_date)
+        if self.tf.is_st(ts_code=ts_code):
+            ret = preclose+round(preclose*0.05,2)
+        else:
+            ret = preclose+round(preclose*0.1,2)
+        return ret
 
     def getFenshi(self, ts_code, trade_date):
         '''
@@ -89,29 +150,40 @@ class SingleStock_daily:
         return ret_df
         
     
-    # def isLimitDown(self, ts_code, trade_date) -> bool:
-    #     '''
-    #     判断当日该股票是否收盘跌停
-    #     '''
-    #     price_info = self.getPrice(ts_code, trade_date)
-    #     if 'error_info' in price_info:
-    #         return False
-    #     return int(price_info['pre_close']*80)/100.0 == price_info['close'] or \
-    #             int(price_info['pre_close']*90)/100.0 == price_info['close'] or \
-    #             int(price_info['pre_close']*95)/100.0 == price_info['close']
+    def isLimitDown(self, ts_code, trade_date) -> bool:
+        '''
+        判断当日该股票是否收盘跌停
+        '''
+        price_info = self.getPrice(ts_code, trade_date)
+        if 'error_info' in price_info:
+            return False
+        return int(price_info['pre_close']*80)/100.0 == price_info['close'] or \
+                int(price_info['pre_close']*90)/100.0 == price_info['close'] or \
+                int(price_info['pre_close']*95)/100.0 == price_info['close']
 
-    # def isLimitUp(self, ts_code, trade_date) -> bool:
-    #     '''
-    #     判断当日该股票是否收盘涨停
-    #     '''
-    #     daily_df = _tf.daily(ts_code=ts_code, trade_date=trade_date)
-    #     return _tp.isLimitUp(daily_df)['isLimitUp'].tolist()
-    #     # price_info = self.getPrice(ts_code, trade_date)
-    #     # if 'error_info' in price_info:
-    #     #     return False
-    #     # return int(price_info['pre_close']*120)/100.0 == price_info['close'] or \
-    #     #         int(price_info['pre_close']*110)/100.0 == price_info['close'] or \
-    #     #         int(price_info['pre_close']*105)/100.0 == price_info['close']
+    def isLimitUp(self, ts_code, trade_date) -> bool:
+        '''
+        判断当日该股票是否收盘涨停
+        '''
+        if trade_date<self.tf.list_date(ts_code=ts_code):
+            return False
+        try:
+            # daily_df = self.tf.daily(ts_code=ts_code, end_date=trade_date).sort_values(by='trade_date').iloc[-1].to_frame().T
+            daily_df = self.tf.daily(ts_code=ts_code, trade_date=trade_date)
+            return self.tp.isLimitUp(daily_df).isLimitUp.iloc[0]
+        except:
+            print(f'[isLimitUp] {ts_code}, {trade_date}')
+            exit()
+
+    def numLimitedUps(self, ts_code, trade_date) -> int:
+        '''
+        返回该股票截止到当天的连扳个数
+        '''
+        ret = 0
+        while self.isLimitUp(ts_code=ts_code, trade_date=trade_date):
+            ret += 1
+            trade_date = self.tt.preTradeDate(date=trade_date)
+        return ret
 
     def getName(self, ts_code) -> str:
         return self.tf.stock_name(ts_code=ts_code)

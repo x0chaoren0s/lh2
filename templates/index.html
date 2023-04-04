@@ -1,19 +1,24 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>lh - index</title>
-    <!-- 引入刚刚下载的 ECharts 文件 -->
-    <script src="static/js/echarts.js"></script>
-  </head>
-  <body>
-    <h1>index</h1>
-    <div>
-      <a href="huice/2ban">回测2板</a>
-    </div>
-    <p>图1</p>
-    {{insert1|safe}}
-    <p>图2</p>
-    {{insert2|safe}}
-  </body>
+    <head>
+        <meta charset="utf-8">
+        <title>lh - index</title>
+        <!-- 引入刚刚下载的 ECharts 文件 -->
+        <script src="../static/js/echarts.js"></script>
+        <script src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    </head>
+    <body>
+        <script src="../static/js/echarts_set_myenvironment.js"></script>
+        <h1>index</h1>
+        <div id="huice_strategies">
+            <a href="huice/2ban">回测2板</a>
+            <a href="huice/2ban_dixi">回测2板+低吸</a>
+            <a href="huice/1ban_dixi">回测1板+低吸</a>
+        </div>
+        <p>图1</p>
+        {{insert1|default('')|safe}}
+        <p>图2</p>
+        {{insert2|default('')|safe}}
+        <script src="../static/js/echarts_enable_all_charts.js"></script>
+    </body>
 </html>

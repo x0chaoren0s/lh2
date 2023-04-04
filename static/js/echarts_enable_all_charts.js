@@ -1,6 +1,8 @@
-const type2builder = new Map([
-    ['pie', build_pie_option],
-    ['fenshi', build_fenshi_option],
+const type2drawfun = new Map([
+    ['pie', draw_pie],
+    ['fenshi', draw_fenshi],
+    ['candles', draw_candleStickBrush],
+    ['account', draw_accountLines]
 ]) // 图表类型及该类型的option的构建函数，各函数在本文件下面定义
 
 var chart_doms = []
@@ -10,18 +12,19 @@ var chart_datas = []
 var chart_options = []
 for(var i=0; i<chart_ids.length; ++i){
     chart_doms[i] = document.getElementById(chart_ids[i])
-    charts[i] = echarts.init(chart_doms[i])
+    // charts[i] = echarts.init(chart_doms[i])
     chart_types[i] = chart_doms[i].getAttribute('chart_type')
     chart_datas[i] = JSON.parse(chart_doms[i].getAttribute('chart_data_json'))
     
-    chart_options[i] = type2builder.get(chart_types[i])(chart_datas[i])
+    // chart_options[i] = type2builder.get(chart_types[i])(chart_datas[i])
 
-    chart_options[i] && charts[i].setOption(chart_options[i])
+    // chart_options[i] && charts[i].setOption(chart_options[i])
+    type2drawfun.get(chart_types[i])(chart_doms[i], chart_datas[i])
 }
 
 // 下面都是函数定义
 
-function build_pie_option(chart_data) {
+function draw_pie(chart_dom, chart_data) {
     option = {
         tooltip: {
           trigger: 'item'
@@ -61,10 +64,12 @@ function build_pie_option(chart_data) {
           }
         ]
       };
-    return option
+    // return option
+    charts = echarts.init(chart_dom)
+    option && charts.setOption(option)
 }
 
-function build_fenshi_option(chart_data) {
+function draw_fenshi(chart_dom, chart_data) {
     // var ts_code = '603528.SH'
     // var ts_name = '多伦科技'
     // var price = [8.99, 9.01, 9.01, 9.11, 9.05, 8.97, 9.08, 9.1, 9.04, 9.08, 9.0, 9.01, 8.96, 9.0, 9.01, 9.06, 9.01, 9.02, 9.07, 9.13, 9.12, 9.17, 9.23, 9.14, 9.23, 9.17, 9.3, 9.29, 9.39, 9.29, 9.39, 9.4, 9.57, 9.53, 9.65, 9.6, 9.6, 9.7, 9.77, 9.76, 9.68, 9.69, 9.78, 9.76, 9.62, 9.54, 9.66, 9.56, 9.61, 9.65, 9.59, 9.62, 9.63, 9.6, 9.61, 9.6, 9.54, 9.53, 9.57, 9.6, 9.66, 9.75, 9.74, 9.9, 10.04, 9.94, 9.89, 9.98, 9.92, 9.98, 10.02, 9.93, 9.93, 9.97, 9.81, 9.85, 9.88, 9.8, 9.76, 9.82, 9.85, 9.82, 9.78, 9.79, 9.86, 9.85, 9.87, 9.91, 9.97, 9.93, 9.9, 9.89, 9.85, 9.81, 9.92, 9.86, 9.86, 9.89, 9.89, 9.88, 9.85, 9.83, 9.81, 9.83, 9.78, 9.79, 9.74, 9.7, 9.72, 9.78, 9.81, 9.74, 9.74, 9.76, 9.74, 9.7, 9.66, 9.75, 9.75, 9.78, 9.73, 9.76, 9.85, 9.79, 9.78, 9.77, 9.76, 9.76, 9.75, 9.7, 9.68, 9.67, 9.67, 9.71, 9.73, 9.73, 9.77, 9.78, 9.73, 9.72, 9.73, 9.73, 9.7, 9.69, 9.67, 9.67, 9.69, 9.66, 9.64, 9.63, 9.64, 9.57, 9.6, 9.62, 9.65, 9.65, 9.63, 9.63, 9.67, 9.71, 9.73, 9.78, 9.83, 9.85, 9.73, 9.83, 9.81, 9.8, 9.82, 9.79, 9.75, 9.78, 9.75, 9.75, 9.79, 9.82, 9.84, 10.0, 9.92, 10.01, 10.07, 10.0, 9.99, 9.97, 9.93, 9.9, 10.0, 10.0, 10.0, 9.98, 9.96, 9.97, 9.97, 9.95, 9.88, 9.88, 9.91, 9.93, 9.93, 9.94, 9.93, 9.9, 9.87, 9.86, 9.87, 9.85, 9.81, 9.78, 9.76, 9.74, 9.7, 9.74, 9.75, 9.75, 9.77, 9.77, 9.77, 9.77, 9.76, 9.76, 9.75, 9.7, 9.67, 9.68, 9.71, 9.74, 9.77, 9.8, 9.89, 10.05, 10.03, 9.97, 9.97, 9.94, 9.96, 9.95, 9.95, 9.96, 9.96, 9.96]
@@ -165,7 +170,354 @@ function build_fenshi_option(chart_data) {
         }
         return avg_price  
     }
-    return option
+    // return option
+    charts = echarts.init(chart_dom)
+    option && charts.setOption(option)
+}
+
+function draw_candleStickBrush(chart_dom, chart_data) {
+    var ts_code = chart_data.ts_code, ts_name = chart_data.ts_name
+    var rawData = chart_data.candleSticks_list // trade_date, open, close, low, high, vol
+    var turnovers = chart_data.turnovers_list
+    
+    var chartDom = chart_dom;
+    var myChart = echarts.init(chartDom);
+    var option;
+
+    const downColor = '#00da3c';
+    const upColor = '#ec0000';
+    function splitData(rawData) {
+        let categoryData = [];
+        let values = [];
+        let volumes = [];
+        for (let i = 0; i < rawData.length; i++) {
+            categoryData.push(rawData[i].splice(0, 1)[0]);
+            values.push(rawData[i]);
+            volumes.push([i, rawData[i][4], rawData[i][0] > rawData[i][1] ? 1 : -1]);
+        }
+        return {
+            categoryData: categoryData,
+            values: values,
+            volumes: volumes
+        };
+    }
+    function calculateMA(dayCount, data) {
+    var result = [];
+    for (var i = 0, len = data.values.length; i < len; i++) {
+        if (i < dayCount) {
+        result.push('-');
+        continue;
+        }
+        var sum = 0;
+        for (var j = 0; j < dayCount; j++) {
+        sum += data.values[i - j][1];
+        }
+        result.push(+(sum / dayCount).toFixed(3));
+    }
+    return result;
+    }
+    // $.get(ROOT_PATH + '/data/asset/data/stock-DJI.json', function (rawData) {
+    var data = splitData(rawData);
+    // myChart.setOption(
+    option = {
+        animation: false,
+        legend: {
+            bottom: 10,
+            left: 'center',
+            data: [ts_name, 'MA5', 'MA10', 'MA20', 'MA30']
+        },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+            type: 'cross'
+            },
+            borderWidth: 1,
+            borderColor: '#ccc',
+            padding: 10,
+            textStyle: {
+            color: '#000'
+            },
+            position: function (pos, params, el, elRect, size) {
+            const obj = {
+                top: 10
+            };
+            obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
+            return obj;
+            }
+            // extraCssText: 'width: 170px'
+        },
+        axisPointer: {
+            link: [
+            {
+                xAxisIndex: 'all'
+            }
+            ],
+            label: {
+            backgroundColor: '#777'
+            }
+        },
+        toolbox: {
+            feature: {
+            dataZoom: {
+                yAxisIndex: false
+            },
+            brush: {
+                type: ['lineX', 'clear']
+            }
+            }
+        },
+        brush: {
+            xAxisIndex: 'all',
+            brushLink: 'all',
+            outOfBrush: {
+            colorAlpha: 0.1
+            }
+        },
+        visualMap: {
+            show: false,
+            seriesIndex: 5,
+            dimension: 2,
+            pieces: [
+            {
+                value: 1,
+                color: downColor
+            },
+            {
+                value: -1,
+                color: upColor
+            }
+            ]
+        },
+        grid: [
+            {
+            left: '10%',
+            right: '8%',
+            height: '50%'
+            },
+            {
+            left: '10%',
+            right: '8%',
+            top: '63%',
+            height: '16%'
+            }
+        ],
+        xAxis: [
+            {
+            type: 'category',
+            data: data.categoryData,
+            boundaryGap: false,
+            axisLine: { onZero: false },
+            splitLine: { show: false },
+            min: 'dataMin',
+            max: 'dataMax',
+            axisPointer: {
+                z: 100
+            }
+            },
+            {
+            type: 'category',
+            gridIndex: 1,
+            data: data.categoryData,
+            boundaryGap: false,
+            axisLine: { onZero: false },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: false },
+            min: 'dataMin',
+            max: 'dataMax'
+            }
+        ],
+        yAxis: [
+            {
+            scale: true,
+            splitArea: {
+                show: true
+            }
+            },
+            {
+            scale: true,
+            gridIndex: 1,
+            splitNumber: 2,
+            axisLabel: { show: false },
+            axisLine: { show: false },
+            axisTick: { show: false },
+            splitLine: { show: false }
+            }
+        ],
+        dataZoom: [
+            {
+            type: 'inside',
+            xAxisIndex: [0, 1],
+            startValue: data.values.length-30
+            },
+            {
+            show: true,
+            xAxisIndex: [0, 1],
+            type: 'slider',
+            top: '85%'
+            }
+        ],
+        series: [
+            {
+            name: ts_name,
+            type: 'candlestick',
+            data: data.values,
+            itemStyle: {
+                color: upColor,
+                color0: downColor,
+                borderColor: undefined,
+                borderColor0: undefined
+            },
+            tooltip: {
+                formatter: function (param) {
+                    param = param[0];
+                    return [
+                        'Date: ' + param.name + '<hr size=1 style="margin: 3px 0">',
+                        'Open: ' + param.data[0] + '<br/>',
+                        'Close: ' + param.data[1] + '<br/>',
+                        'Lowest: ' + param.data[2] + '<br/>',
+                        'Highest: ' + param.data[3] + '<br/>'
+                    ].join('');
+                }
+            }
+            },
+            {
+            name: 'MA5',
+            type: 'line',
+            data: calculateMA(5, data),
+            showSymbol: false,
+            smooth: true,
+            lineStyle: {
+                opacity: 0.5
+            }
+            },
+            {
+            name: 'MA10',
+            type: 'line',
+            data: calculateMA(10, data),
+            smooth: true,
+            showSymbol: false,
+            lineStyle: {
+                opacity: 0.5
+            }
+            },
+            {
+            name: 'MA20',
+            type: 'line',
+            data: calculateMA(20, data),
+            smooth: true,
+            showSymbol: false,
+            lineStyle: {
+                opacity: 0.5
+            }
+            },
+            {
+            name: 'MA30',
+            type: 'line',
+            data: calculateMA(30, data),
+            smooth: true,
+            showSymbol: false,
+            lineStyle: {
+                opacity: 0.5
+            }
+            },
+            {
+            name: 'Volume',
+            type: 'bar',
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: data.volumes
+            },
+            {
+            name: 'Turnover Rate',
+            type: 'scatter',
+            symbolSize: 0,
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: turnovers
+            }
+        ]
+        }
+        
+    myChart.dispatchAction({
+        type: 'brush',
+        areas: [
+        {
+            brushType: 'lineX',
+            coordRange: ['2016-06-02', '2016-06-20'],
+            xAxisIndex: 0
+        }
+        ]
+    });
+    option && myChart.setOption(option);
+}
+
+function draw_accountLines(chart_dom, chart_data) {
+    option = {
+        tooltip: {
+          trigger: 'item'
+        },
+        legend: {
+          top: '5%',
+          left: 'center'
+        },
+        xAxis: [
+            {
+                type: 'category',
+                data: chart_data.trade_dates
+            }
+        ],
+        yAxis:[
+            {
+                name: '总资产',
+                type: 'value',
+                position: 'left',
+                axisLine: {
+                    show: true
+                }
+            },
+            {
+                name: '仓位',
+                type: 'value',
+                position: 'right',
+                axisLine: {
+                    show: true
+                }
+            }
+        ],
+        series: [
+            {
+                name: '总资产',
+                type: 'line',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                min: chart_data.totals.min,
+                label: {
+                    show: false,
+                    // position: 'top'
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 40,
+                        fontWeight: 'bold'
+                    }
+                },
+                labelLine: {
+                    show: true
+                },
+                data: chart_data.totals
+            },
+            {
+                name: '仓位',
+                type: 'bar',
+                data: chart_data.positions,
+                yAxisIndex: 1
+            }
+        ]
+      };
+    charts = echarts.init(chart_dom)
+    option && charts.setOption(option)
 }
 
 function round(num,digits=2) {

@@ -1,14 +1,21 @@
 from lh.stockinfo.single_stock_daily import SingleStock_daily
+from lh.utils.tdx_df_fetcher import Tdx_df_fetcher
+import lh.stockinfo.data_fetcher as df
 
 class DayStamp:
     ssd = SingleStock_daily()
+    # tdf = Tdx_df_fetcher()
+    tdf = df
     def __init__(self, trade_date='20230103', start_cash=10000.0, end_cash=10000.0,
                  start_tscode2vol_dict=dict(), end_tscode2vol_dict=dict(),
-                 buy_list=[], sell_list=[]) -> None:
+                 buy_list=[], sell_list=[],
+                 meta_dict=dict()) -> None:
         '''
         start_tscode2vol_dict、end_tscode2vol_dict：{'001338.SZ':100}：{ts_code:拥有数量}
 
         buy_tscode2vol_list、sell_tscode2vol_list：[('001338.SZ',100,19.36)}：[(ts_code,交易数量,成交价格)]
+
+        meta_dict：可用于保存其他信息，如保存当天哪些股票需要跟踪低吸，在下一个交易日读取该信息并把响应股票放入buy_pool
         '''
         self.trade_date = trade_date
         self.start_cash = start_cash
@@ -24,29 +31,136 @@ class DayStamp:
 
         self.end_total = self.end_cash
         for ts_code, vol in self.end_tscode2vol_dict.items():
-            self.end_total += self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).close.tolist()[0] * vol
+            try:
+                self.end_total += self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).close.iloc[0] * vol
+            except:
+                assert False, f'{ts_code}, {self.trade_date}'
 
-    def update_buy_deals(self, buy_form_dict):
+        self.meta_dict = meta_dict
+
+    def update_buy_deals(self, sell_form_dict, buy_form_dict, fenshi_startind:int=None):
         '''
+        sell_form_dict = {
+            'sell_tscode_list' : flask.request.form.getlist('sell_tscode'),
+            'sell_type_list' : [flask.request.form.get(f'sell_type_{tscode}') for tscode in flask.request.form.getlist('sell_tscode')]
+        }
+            <input type="radio" name="sell_type_{{stk.ts_code}}" value="no" checked="checked">不清仓<br>
+            <input type="radio" name="sell_type_{{stk.ts_code}}" value="hongpanqingcang">红盘清仓<br>
+            <input type="radio" name="sell_type_{{stk.ts_code}}" value="shuishangqingcang">水上清仓<br>
+            <input type="radio" name="sell_type_{{stk.ts_code}}" value="dietingqingcang">跌停清仓
         buy_form_dict = {
             'buy_tscode_list' : flask.request.form.getlist('buy_tscode'),
             'buy_price_list' : [float(p) for p in flask.request.form.getlist('buy_price')],
             'buy_hands_list' : [int(h) for h in flask.request.form.getlist('buy_hands')]
         }
 
-        暂时还没处理手续费印花税等
+        fenshi_startind: 日内自动止盈挂单，从该分时数据ind（0~239）开始挂分时单交易。默认为None全天都挂单
+
+        先处理昨日收盘的买单和卖单
+
+        # 再日内分时操作：11点后若出现开板，则红盘出
         '''
         self.buy_list = buy_form_dict['buy_tscode_list']
         for ts_code, hands, price in zip(self.buy_list, buy_form_dict['buy_hands_list'], buy_form_dict['buy_price_list']):
             if hands==0 or price==0.0:
                 continue
-            if price<self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).low.tolist()[0]:
+            daily_df = self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date)
+            if len(daily_df)==0 or daily_df.vol.iloc[0]==0:
+                continue
+            assert len(daily_df)>0, f'{ts_code}, {self.trade_date}'
+            if price<daily_df.low.iloc[0]:
+                continue
+            price = min(price, daily_df.open.iloc[0])
+            spend_value = hands*100*price
+            if spend_value >= self.end_cash:
                 continue
             self.end_tscode2vol_dict.setdefault(ts_code, 0)
             self.end_tscode2vol_dict[ts_code] += hands*100
-            spend_value = hands*100*price
-            end_value = hands*100*self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).close.tolist()[0]
+            # end_value = hands*100*self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).close.iloc[0]
             self.end_cash -= spend_value
-            self.end_total = self.end_total-spend_value+end_value
+            assert self.end_cash>0
+            # self.end_total = self.end_total-spend_value+end_value
+
+        self.sell_list = sell_form_dict['sell_tscode_list']
+        for ts_code, sell_type in zip(self.sell_list, sell_form_dict['sell_type_list']):
+            # 昨日收盘挂的今日卖单
+            if self.tdf.daily(ts_code, self.trade_date).vol.iloc[0]==0:
+                continue
+            if sell_type=='hongpanqingcang':
+                preopen = self.ssd.getPreOpen(ts_code=ts_code, trade_date=self.trade_date)
+                vol = self.start_tscode2vol_dict[ts_code]
+                self._try_sell(ts_code=ts_code, sell_vol=vol, sell_price=preopen)
+            elif sell_type=='shuishangqingcang':
+                preclose = self.ssd.getPreClose(ts_code=ts_code, trade_date=self.trade_date)
+                vol = self.start_tscode2vol_dict[ts_code]
+                self._try_sell(ts_code=ts_code, sell_vol=vol, sell_price=preclose)
+            elif sell_type=='dietingqingcang':
+                dieting = self.ssd.getDieting(ts_code=ts_code,trade_date=self.trade_date)
+                vol = self.start_tscode2vol_dict[ts_code]
+                self._try_sell(ts_code=ts_code, sell_vol=vol, sell_price=dieting)
+
+        # for ts_code in set(self.end_tscode2vol_dict.keys()) & set(self.start_tscode2vol_dict.keys()):
+        #     if self.end_tscode2vol_dict[ts_code]==self.start_tscode2vol_dict[ts_code]:
+        #         continue
+        #     fenshi_df = self.tdf.get_fenshi_df(ts_code=ts_code, trade_date=self.trade_date)
+        #     zhangting = self.ssd.getZhangting(ts_code=ts_code,trade_date=self.trade_date)
+        #     if (fenshi_df.iloc[fenshi_startind:].price<zhangting).any():
+        #         preopen = self.ssd.getPreOpen(ts_code=ts_code, trade_date=self.trade_date)
+        #         vol = self.start_tscode2vol_dict[ts_code]
+        #         self._try_sell(ts_code=ts_code, sell_vol=vol, sell_price=preopen, fenshi_startind=fenshi_startind)
+
+        # 最后统计收盘总值
+        self.end_total = self.end_cash
+        for ts_code, vol in list(self.end_tscode2vol_dict.items()):
+            if vol==0 and ts_code in self.start_tscode2vol_dict and self.start_tscode2vol_dict[ts_code]==0:
+                del self.end_tscode2vol_dict[ts_code]
+            if vol==0:
+                continue
+            try:
+                self.end_total += self.ssd.getDaily_df(ts_code=ts_code,trade_date=self.trade_date).close.iloc[0] * vol
+            except:
+                assert False, f'{ts_code}, {self.trade_date}'
+
+
+            
+
+
+    def _try_sell(self, ts_code, sell_vol, sell_price, fenshi_startind:int=None):
+        '''
+        ①校正【卖出量】至多为昨日持有量，【卖出价】为调整单次交易佣金、印花税、过户费后的价格
+        
+        ②校正【卖出价】最低为当日开盘价
+
+        ③【卖出价】低于当日最高价才卖
+
+        fenshi_startind: 从该分时数据ind（0~239）开始挂分时单交易。默认为None全天都挂单
+        '''
+        sell_vol = min(sell_vol, self.start_tscode2vol_dict[ts_code])
+        if sell_vol==0:
+            return
+        # sell_price = round((round(sell_price*sell_vol*0.001,2)+5.02+sell_price*sell_vol)/sell_vol,2)
+        high = self.ssd.getHigh(ts_code=ts_code, trade_date=self.trade_date)
+        # preclose = self.ssd.getPreClose(ts_code=ts_code, trade_date=self.trade_date)
+        deal_success = False
+        if fenshi_startind is None:
+            if sell_price<high:
+                open = self.ssd.getOpen(ts_code=ts_code, trade_date=self.trade_date)
+                sell_price = max(sell_price, open)
+                deal_success = True
+        else:
+            fenshi_df = self.tdf.get_fenshi_df(ts_code=ts_code, trade_date=self.trade_date)
+            if (fenshi_df.iloc[fenshi_startind:].price>sell_price).any():
+                open = fenshi_df.iloc[fenshi_startind].price
+                sell_price = max(sell_price, open)
+                deal_success = True
+        if deal_success:
+            # prevalue = sell_vol * preclose
+            sellvalue = sell_vol * sell_price
+            self.end_cash += sellvalue
+            # self.end_total = self.end_total-prevalue+sellvalue
+            self.end_tscode2vol_dict[ts_code] -= sell_vol
+            # if self.end_tscode2vol_dict[ts_code]==0:   # 不再交易完后就删除清仓股票，而是转到所有交易都做完后统一处理
+            #     del self.end_tscode2vol_dict[ts_code]
+
 
         
