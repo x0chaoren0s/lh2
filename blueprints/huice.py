@@ -537,7 +537,7 @@ def huice_1ban_dixi_working():
                                  trade_date=e_1d.trade_date,
                                  end_total=e_1d.dayStamps[e_1d.trade_date].end_total,
                                  end_cash=e_1d.dayStamps[e_1d.trade_date].end_cash,
-                                 change=f'{change:.2f}',
+                                 change=f'{change:.f}',
                                  chg_pct=f'{chg_pct:.2f}',
                                  account_lines_html=account_lines_html,
                                  end_tags = end_tags,
