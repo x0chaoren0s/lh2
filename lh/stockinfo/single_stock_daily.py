@@ -112,28 +112,54 @@ class SingleStock_daily:
         except:
             assert False, f'{ts_code}, {trade_date}'
 
+    def getVol(self, ts_code, trade_date) -> float:
+        '''
+        返回特定股票所在交易日的成交量
+        '''
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['vol'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {trade_date}'
+
+    def getPctChg(self, ts_code, trade_date) -> float:
+        '''
+        返回特定股票所在交易日的涨跌幅
+        '''
+        try:
+            return self.getDaily_df(ts_code=ts_code,trade_date=trade_date)['pct_chg'].iloc[0]
+        except:
+            assert False, f'{ts_code}, {trade_date}'
+
+
+
     def getDieting(self, ts_code, trade_date) -> float:
         '''
-        返回特定沪深主板股票所在交易日的跌停价
+        返回特定股票所在交易日的跌停价
         '''
         preclose = self.getPreClose(ts_code=ts_code,trade_date=trade_date)
-        if self.tf.is_st(ts_code=ts_code):
-            ret = preclose-round(preclose*0.05,2)
+        if ts_code.startswith('00') or ts_code.startswith('60'):
+            if self.tf.is_st(ts_code=ts_code):
+                ret = preclose-round(preclose*0.05,2)
+            else:
+                ret = preclose-round(preclose*0.1,2)
         else:
-            ret = preclose-round(preclose*0.1,2)
+            ret = preclose-round(preclose*0.2,2)
         return ret
 
     def getZhangting(self, ts_code, trade_date) -> float:
         '''
-        返回特定沪深主板股票所在交易日的涨停价
+        返回特定股票所在交易日的涨停价
         '''
         preclose = self.getPreClose(ts_code=ts_code,trade_date=trade_date)
-        if self.tf.is_st(ts_code=ts_code):
-            ret = preclose+round(preclose*0.05,2)
+        if ts_code.startswith('00') or ts_code.startswith('60'):
+            if self.tf.is_st(ts_code=ts_code):
+                ret = preclose+round(preclose*0.05,2)
+            else:
+                ret = preclose+round(preclose*0.1,2)
         else:
-            ret = preclose+round(preclose*0.1,2)
+            ret = preclose+round(preclose*0.2,2)
         return ret
-
+    
     def getFenshi(self, ts_code, trade_date):
         '''
         #### 获取历史分时数据，即历史1分钟数据。
