@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>lh - 回测问财手动条件</title>
+    <script src="../../static/js/echarts.js"></script>
+  </head>
+  <body>
+    <script src="../../static/js/echarts_set_myenvironment.js"></script>
+    <a href="/">返回首页</a>
+    <h1>回测问财手动条件</h1>
+    <form action="/huice/wencaiShoudong/setting" method="post">
+        起止时间：<input name="trade_time_beg">-<input name="trade_time_end"><br>
+        问财语句（将自动替换：昨日、今日）：<input name="wencai_query"><button type="submit">开始回测</button>
+    </form>
+    <h2>已设置：{{beg_date}}-{{end_date}}</h2>
+    <h2>今日问财语句：{{wencai_query}}</h2>
+    <form action="/save_buf" method="post">
+      <button>保存下载的数据</button>
+    </form>
+    <h3>今日复盘：{{trade_date}}</h3>
+    <h4>收盘总值：{{end_total}} 收盘现金：{{end_cash}} 昨日涨额：{{change}} 昨日涨幅: {{chg_pct}}%</h4>
+    {{account_lines_html|safe}}
+    <form action="/huice/wencaiShoudong/working/choosing" method="post">
+      <h3>持仓股票-上午清仓</h3>
+      <table>
+        <tr>
+          <th>持仓数量</th>
+          <th>持仓市值</th>
+          <th>相关板块热点</th>
+          <th>历史k线</th>
+          <th>昨日价</th>
+          <th>今日价</th>
+          <th>分时</th>
+          <th>操作</th>
+        </tr>
+        {% for stk in end_pool %}
+        <tr>
+          <td>{{stk.have_vol}}股</td>
+          <td>{{stk.have_amount}}</td>
+          <td>{{stk.tags}}</td>
+          <td>{{stk.candles_html|safe}}</td>
+          <td>
+            昨收<br>
+            {{stk.pre_close}}
+          </td>
+          <td>
+            <p style="color: {% if stk.open > stk.pre_close %}red{% elif stk.open < stk.pre_close %}green{% else %}black{% endif %};">
+              今开<br>
+              {{ stk.open }}
+            </p>
+            <p style="color: {% if stk.high > stk.pre_close %}red{% elif stk.high < stk.pre_close %}green{% else %}black{% endif %};">
+              今高<br>
+              {{ stk.high }}
+            </p>
+          </td>
+          <td>{{stk.fenshi_html|safe}}</td>
+          <td>
+            盘中清仓<br>
+            <input name="sell_tscode" value={{stk.ts_code}} hidden>
+            <input name="sell_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.sell_price_str}}><br>
+            尾盘买入金额及手数<br>
+            <input name="buy_tscode" value={{stk.ts_code}} hidden>
+            <input name="buy_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_hands" type="number" value="0">
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      <h3>昨日语句今日结果</h3>
+      <table>
+        <tr>
+          <th>相关板块热点</th>
+          <th>历史k线</th>
+          <th>昨日价</th>
+          <th>今日价</th>
+          <th>分时</th>
+          <th>挂单金额及手数</th>
+        </tr>
+        {% for stk in pre_daily_pool %}
+        <tr>
+          <td>{{stk.tags}}</td>
+          <td>{{stk.candles_html|safe}}</td>
+          <td>
+            昨收<br>
+            {{stk.pre_close}}
+          </td>
+          <td>
+            <p style="color: {% if stk.open > stk.pre_close %}red{% elif stk.open < stk.pre_close %}green{% else %}black{% endif %};">
+              今开<br>
+              {{ stk.open }}
+            </p>
+            <p style="color: {% if stk.high > stk.pre_close %}red{% elif stk.high < stk.pre_close %}green{% else %}black{% endif %};">
+              今高<br>
+              {{ stk.high }}
+            </p>
+          </td>
+          <td>{{stk.fenshi_html|safe}}</td>
+          <td>
+            <input name="buy_tscode" value={{stk.ts_code}} hidden>
+            <input name="buy_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_hands" type="number" value="0">
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      <h3>今日语句选股</h3>
+      <table>
+        <tr>
+          <th>相关板块热点</th>
+          <th>历史k线</th>
+          <th>昨日价</th>
+          <th>今日价</th>
+          <th>分时</th>
+          <th>挂单金额及手数</th>
+        </tr>
+        {% for stk in daily_pool %}
+        <tr>
+          <td>{{stk.tags}}</td>
+          <td>{{stk.candles_html|safe}}</td>
+          <td>
+            昨收<br>
+            {{stk.pre_close}}
+          </td>
+          <td>
+            <p style="color: {% if stk.open > stk.pre_close %}red{% elif stk.open < stk.pre_close %}green{% else %}black{% endif %};">
+              今开<br>
+              {{ stk.open }}
+            </p>
+            <p style="color: {% if stk.high > stk.pre_close %}red{% elif stk.high < stk.pre_close %}green{% else %}black{% endif %};">
+              今高<br>
+              {{ stk.high }}
+            </p>
+          </td>
+          <td>{{stk.fenshi_html|safe}}</td>
+          <td>
+            <input name="buy_tscode" value={{stk.ts_code}} hidden>
+            <input name="buy_price" type="number" min="0.00" max="2000.00" step="0.01" value={{stk.buy_price_str}}>
+            <input name="buy_hands" type="number" value="0">
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      <button type="submit">下一日</button>
+    </form>
+    <script src="../../static/js/echarts_enable_all_charts.js"></script>
+  </body>
+</html>
