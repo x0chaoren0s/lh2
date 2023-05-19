@@ -1,1 +1,1 @@
-from lh.huice.engine_2ban import Engine_2ban, Engine_2ban_dixi, Engine_1ban_dixi
+from lh.huice.engine_2ban import Engine_2ban, Engine_2ban_dixi, Engine_1ban_dixi, Engine_weipandieting, Engine_wencai
