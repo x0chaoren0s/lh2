@@ -32,6 +32,37 @@ class Tushare_df_processor:
         # ret_df['isLimitUp'] = (t1 | t2 | t5) & t4
         ret_df['isLimitUp'] = (t1 | t2 | t3 | t5) & t4
         return ret_df
+
+    def isLimitDown(self, tushare_daily_df) -> pd.DataFrame:
+        if 'pre_close' not in tushare_daily_df.columns:
+            tushare_daily_df['pre_close'] = 0
+        t1 = abs(tushare_daily_df['pre_close']-(tushare_daily_df['pre_close']*0.2).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t2 = abs(tushare_daily_df['pre_close']-(tushare_daily_df['pre_close']*0.1).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t3 = abs(tushare_daily_df['pre_close']-(tushare_daily_df['pre_close']*0.05).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t4 = tushare_daily_df['close'] == tushare_daily_df['low']
+        t5 = tushare_daily_df['pct_chg'] <= 10.0
+        ret_df = tushare_daily_df.copy()
+        ret_df['isLimitDown'] = (t1 | t2 | t3 | t5) & t4
+        return ret_df
+
+    def isFakeLimitUp(self, tushare_daily_df) -> pd.DataFrame:
+        # t1 = (tushare_daily_df['pre_close']*120).astype(int)/100. == tushare_daily_df['close']
+        # t2 = (tushare_daily_df['pre_close']*110).astype(int)/100. == tushare_daily_df['close']
+        # t3 = (tushare_daily_df['pre_close']*105).astype(int)/100. == tushare_daily_df['close']
+        if 'pre_close' not in tushare_daily_df.columns:
+            tushare_daily_df['pre_close'] = 0
+        t1 = abs(tushare_daily_df['pre_close']+(tushare_daily_df['pre_close']*0.2).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t2 = abs(tushare_daily_df['pre_close']+(tushare_daily_df['pre_close']*0.1).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t3 = abs(tushare_daily_df['pre_close']+(tushare_daily_df['pre_close']*0.05).astype('float').round(2) - tushare_daily_df['close']) < 0.00001
+        t4 = tushare_daily_df['close'] == tushare_daily_df['high']
+        t5 = tushare_daily_df['pct_chg'] >= 10.0
+        t6 = tushare_daily_df['ts_code'].str.startswith('60') | tushare_daily_df['ts_code'].str.startswith('00')
+        t7 = tushare_daily_df['pct_chg'] >= 9.5
+        ret_df = tushare_daily_df.copy()
+        # ret_df['isLimitUp'] = (t1 | t2 | t3) & t4
+        # ret_df['isLimitUp'] = (t1 | t2 | t5) & t4
+        ret_df['isFakeLimitUp'] = (t6 & (t1 | t2 | t3 | t5) & t4) | ((~t6) & t7)
+        return ret_df
     
     
     def isNewlyListed(self, tushare_daily_df, trade_date) -> pd.DataFrame:
