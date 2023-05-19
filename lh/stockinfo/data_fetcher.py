@@ -99,7 +99,7 @@ def get_fenbi_minuteK_dayK_single_day(ts_code, trade_date) -> Tuple[bool, pd.Dat
     return has_data, fenbi, minute_k, day_k
 
 # 替换 Tdx_df_fetcher
-def get_fenshi_df(ts_code, trade_date) -> pd.DataFrame:
+def get_fenshi_df(ts_code, trade_date, try_times=1, max_try_times=20) -> pd.DataFrame:
     '''
     #### 获取历史分时数据，即历史1分钟数据。
     #### trade_date会自动转换为最近的历史交易日。
@@ -117,7 +117,7 @@ def get_fenshi_df(ts_code, trade_date) -> pd.DataFrame:
         238  603528.SH   20230227      14:58   9.96       0
         239  603528.SH   20230227      14:59   9.96    8335
     '''
-    tdx_market = 0 if ts_code[-2:]=='SZ' else 1
+    tdx_market = 0 if ts_code[-2:] in ['SZ'] else 1 if ts_code[-2:] in ['SH'] else 2
     tdx_code = ts_code[:-3]
     tdx_date = trade_date
     # with TDX_API.connect(TDX_IP, TDX_PORT):
@@ -132,18 +132,35 @@ def get_fenshi_df(ts_code, trade_date) -> pd.DataFrame:
         try:
             fenshi_df['trade_time'] = TRADE_TIME
         except:
-            assert False, f'[get_fenshi_df] {ts_code}, {trade_date}'
+            if try_times<=max_try_times:
+                return get_fenshi_df(ts_code, trade_date, try_times+1, max_try_times)
+            else:
+                raise Exception(f'[get_fenshi_df] {ts_code}, {trade_date}')
     else:
         fenshi_df['trade_date'] = trade_date
         fenshi_df.vol = 0
         fenshi_df.price = fenshi_df.price.iloc[-1]
     return fenshi_df[['ts_code','trade_date','trade_time','price','vol']]
+def get_fenshi_df_k_days(ts_code, trade_date_end, k) -> pd.DataFrame:
+    '''
+    返回包括 trade_date_end 在内的往前最多 k 个连续交易日的某股票分时数据。
+    共 240*k 行：
+                    ts_code trade_date trade_time  price     vol
+        0    603528.SH   20230227      09:30   8.99  100909
+        1    603528.SH   20230227      09:31   9.01   30707
+    '''
+    ret = []
+    for trade_date in tt.getTradeDateList(None, trade_date_end, k):
+        if trade_date<list_date(ts_code):
+            continue
+        ret.append(get_fenshi_df(ts_code, trade_date))
+    return pd.concat(ret)
 
 
 # 替换 Dongcai_df_fetcher
 def daily(ts_code=None, trade_date=None, end_date=None, try_times=1, max_try_times=3) -> pd.DataFrame:
     '''
-    获取日k线
+    获取日k线，若没有数据则返回空表
     
     共3种调用情况:
     ||ts_code|trade_date|end_date|
@@ -153,7 +170,7 @@ def daily(ts_code=None, trade_date=None, end_date=None, try_times=1, max_try_tim
     |某天所有股|None|str|None|
     '''
     if ts_code is not None:
-        secid = '0.'+ts_code[:-3] if ts_code[-2:]=='SZ' else '1.'+ts_code[:-3]
+        secid = '0.'+ts_code[:-3] if ts_code[-2:] in ['SZ','BJ'] else '1.'+ts_code[:-3]
         buf_file = f'daily_{tt.nowTradeDate()}_{secid}.json'
         buf_folder = r'D:\Users\60490\lh2\buffer\dongcai'
         if buf_file not in os.listdir(buf_folder):
@@ -189,10 +206,19 @@ def daily(ts_code=None, trade_date=None, end_date=None, try_times=1, max_try_tim
         daily_df['ts_name'] = res_dict['data']['name']
         daily_df['pre_close'] = [0, *(daily_df.close.tolist()[:-1])]
         if trade_date is not None:      # |某股某天|str|str|None|
+            if trade_date<list_date(ts_code):
+                return pd.DataFrame(columns=[
+                    'trade_date', 'open', 'close', 'high', 'low', 'vol', 'amount', 'amplitude',
+                    'pct_chg', 'change', 'turnover', 'ts_code', 'ts_name', 'pre_close'
+                ])
             if (trade_date == daily_df.trade_date).any():  # 当日正常交易
                 return daily_df[daily_df['trade_date']==trade_date]
             else:                           # 当日停牌没有数据
-                ret = daily_df[daily_df['trade_date']<trade_date].iloc[-1].copy()  # 此时是series
+                try:
+                    ret = daily_df[daily_df['trade_date']<trade_date].iloc[-1].copy()  # 此时是series
+                except:
+                    print(f'[daily] {ts_code}, {trade_date}, {end_date}')
+                    exit(1)
                 ret.trade_date = trade_date
                 ret.open = ret.high = ret.low = ret.pre_close = ret.close
                 ret.vol = ret.amount = ret.amplitude = ret.pct_chg = ret.change = ret.turnover = 0
@@ -250,6 +276,15 @@ def get_tags(ts_code) -> set:
 def get_name(ts_code) -> str:
     '''返回股票名称'''
     return stock_name(ts_code)
+def get_pre_close(ts_code, trade_date) -> float:
+    try:
+        return float(daily(ts_code, trade_date).pre_close.iloc[0])
+    except:
+        return 0.0
+def get_high(ts_code, trade_date) -> float:
+    return float(daily(ts_code, trade_date).high.iloc[0])
+def get_open(ts_code, trade_date) -> float:
+    return float(daily(ts_code, trade_date).open.iloc[0])
 
 # 替换 Tushare_df_fetcher
 # daily 见上
@@ -295,9 +330,10 @@ if __name__ == '__main__':
     # print(get_tags('600785.SH'))
     # print(get_name('603528.SH'))
     # print(stock_name('603528.SH'))
-    # print(daily('603528.SH','20230327'))
+    # print(daily('001368.SZ','20230310'))
     # print(daily('603528.SH',end_date='20230327'))
     # print(daily(trade_date='20230327'))
+    # print(set(daily(trade_date='20230327').ts_code.tolist()))
     # print(daily('002761.SZ', '20220222'))
     # print(daily('000587.SZ', '20230202'))
     # print(daily('000587.SZ', '20230203'))
@@ -309,7 +345,7 @@ if __name__ == '__main__':
     # print(get_fenshi_df('601059.SH', '20230208'))
     # print(get_fenshi_df('000892.SZ', '20220901'))
     # print(get_fenshi_df('002877.SZ', '20230209'))
-    # print(get_fenshi_df('002660.SZ', '20230215'))
+    print(get_fenshi_df('600629.SH', '20230510'))
     # print(stock_basic('600260.SH'))
 
     tdx_disconnect(api=TDX_API)
