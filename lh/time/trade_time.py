@@ -58,16 +58,36 @@ class Trade_time:
         '''
         return self.toTradeDate(date=time.strftime("%Y%m%d", time.localtime()))
     
-    def getTradeDateList(self, beg_date='20220101', end_date='20221231') -> list:
+    def getTradeDateList(self, beg_date='20220101', end_date='20221231', k=None) -> list:
         '''
-        返回从 beg_date 到 end_date 的所有交易日的列表
+        返回一段连续的交易日序列
+        
+        共3种调用情况:
+        ||beg_date|end_date|k|
+        | -- | -- | -- | -- |
+        |从beg_date到end_date的闭区间|str|str|Any|
+        |从(包括)beg_date起往后k日的闭区间|str|None|int|
+        |从(包括)end_date起往前k日的闭区间|None|str|int|
         '''
         ret = []
-        trade_date = self.toTradeDate(beg_date)
-        trade_date = trade_date if trade_date==beg_date else self.nextTradeDate(trade_date)
-        while trade_date<end_date:
-            ret.append(trade_date)
-            trade_date = self.nextTradeDate(trade_date)
+        if isinstance(beg_date, str) and isinstance(end_date, str):
+            trade_date = self.toTradeDate(beg_date)
+            trade_date = trade_date if trade_date==beg_date else self.nextTradeDate(trade_date)
+            while trade_date<end_date:
+                ret.append(trade_date)
+                trade_date = self.nextTradeDate(trade_date)
+        elif isinstance(beg_date, str) and end_date is None and isinstance(k, int):
+            trade_date = self.toTradeDate(beg_date)
+            trade_date = trade_date if trade_date==beg_date else self.nextTradeDate(trade_date)
+            for _ in range(k):
+                ret.append(trade_date)
+                trade_date = self.nextTradeDate(trade_date)
+        elif beg_date is None and isinstance(end_date, str) and isinstance(k, int):
+            trade_date = self.toTradeDate(end_date)
+            for _ in range(k):
+                ret.append(trade_date)
+                trade_date = self.preTradeDate(trade_date)
+            ret.reverse()
         return ret
         
     
