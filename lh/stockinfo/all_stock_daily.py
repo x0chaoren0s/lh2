@@ -57,6 +57,41 @@ class AllStock_daily:
         if ts_name:
             ret = [self.tf.stock_name(ts_code=ts_code) for ts_code in ret]
         return ret
+    # def getLimitDowns(self, trade_date, ts_name=False, only_hs=False) -> list:
+    #     '''
+    #     返回一个list: 包含当日所有收盘跌停的股票代码（若ts_name=True则返回的是对应股票名称，若only_hs=True则只返回沪深主板的票）
+    #     '''
+    #     daily_df = self.getPrice(trade_date=trade_date)
+    #     daily_df = self.tp.isLimitDown(daily_df)
+    #     if only_hs:
+    #         daily_df = daily_df[
+    #             (daily_df['ts_code'].str.startswith('60')) | (daily_df['ts_code'].str.startswith('00'))]
+    #     ret = daily_df[daily_df['isLimitDown']]['ts_code'].tolist()
+    #     if ts_name:
+    #         ret = [self.tf.stock_name(ts_code=ts_code) for ts_code in ret]
+    #     return ret
+
+    def getFakeLimitUps(self, trade_date, ts_name=False, sort=False) -> list:
+        '''
+        返回一个list: 包含当日所有收盘涨停的主板股票和涨幅超过9.5个点的非主板的股票代码
+        
+        ts_name: 是否返回的是对应股票名称
+        
+        sort: 是否将结果按照连扳个数从高到低排序，连板数相同的按成交量从高到低排序
+        '''
+        daily_df = self.getPrice(trade_date=trade_date)
+        daily_df = self.tp.isFakeLimitUp(daily_df)
+        ret = daily_df[daily_df['isFakeLimitUp']]['ts_code'].tolist()
+        if sort:
+            # cmp = self.ssd.numLimitedUps()
+            ret = sorted(ret, key=lambda tscode: (
+                -self.ssd.numLimitedUps(ts_code=tscode, trade_date=trade_date),
+                -self.ssd.getVol(ts_code=tscode, trade_date=trade_date)
+                )
+            )
+        if ts_name:
+            ret = [self.tf.stock_name(ts_code=ts_code) for ts_code in ret]
+        return ret
     
     def get_least_2bans_list(self, trade_date, ts_name=False, only_hs=False, sort=False) -> list:
         '''
@@ -117,6 +152,30 @@ class AllStock_daily:
         if ts_name:
             ret = [self.tf.stock_name(ts_code) for ts_code in ret]
         return ret
+
+    def get_least_k_ptr_list(self, k, date, ts_name=False, sort=False) -> list:
+        '''
+        返回当日至少涨幅 k 个点及以上的股票
+        
+        ts_name: 是否返回股票名称
+        sort: 是否将结果按照涨幅从高到低排序
+        '''
+        trade_date = self.tt.toTradeDate(date)
+        ret_base = self.getFakeLimitUps(trade_date, ts_name, sort)
+        daily_df = self.getPrice(trade_date=trade_date)
+        daily_df = daily_df[daily_df['pct_chg']>=k]
+        ret_addition = list(set(daily_df.ts_code.tolist())-set(ret_base))
+        if sort:
+            print('[get_least_k_ptr_list] sorting...')
+            ret_addition = sorted(ret_addition, reverse=True, key=lambda tscode: 
+                         (self.ssd.getPctChg(ts_code=tscode, trade_date=trade_date)))
+            print('[get_least_k_ptr_list] sorted.')
+        if ts_name:
+            ret_addition = [self.tf.stock_name(ts_code) for ts_code in ret_addition]
+        ret = [*ret_base, *ret_addition]
+        return ret
+
+
 
     def getNewlyListed(self, trade_date):
         '''返回一个list: 包含当日新上市的股票代码'''
